@@ -1,0 +1,4 @@
+# 第2フェーズ以降で使う Python ライブラリ
+#   インストール: python -m pip install -r requirements.txt
+Pillow>=10.0
+numpy>=1.24

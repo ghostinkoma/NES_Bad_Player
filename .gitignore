@@ -1,0 +1,18 @@
+# ビルドの出力（ROM・変換結果のキャッシュ・プレビュー動画）
+build/
+
+# 動画・音楽などの素材（権利は各権利者にあるため公開しない。各自で用意する）
+resouce/
+
+# 確認用の録画
+TestEvi/
+
+# Python
+__pycache__/
+*.pyc
+
+# エディタ・OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
