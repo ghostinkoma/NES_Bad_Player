@@ -1,4 +1,4 @@
-{
+﻿{
     "threshold": 128,
     "tol": 0,
     "snap_seconds": 3,
@@ -19,11 +19,11 @@
             {"nes_frames": 12, "texts": [{"text": "software. Use at your own risk.", "y": 158, "align": "left", "x": 19, "width": 999}]},
             {"seconds": 2}
          ]},
-        {"name": "ORIGEN",   "frames": "resouce/origen_nes_256x240", "mode": "mono", "kbps": 6.5, "snap_seconds": 4},
+        {"name": "ORIGEN",   "frames": "resouce/origen_nes_256x240", "mode": "mono", "kbps": 6.0, "snap_seconds": 4, "audio_rate": 14},
         {"name": "TK REMIX", "frames": "resouce/Tetsuy_Komuro_Remix.webm_nes_256x240", "mode": "gray", "step": 2,
          "kbps": 4.5, "snap_seconds": 6},
         {"name": "2026AI",   "frames": "resouce/2026AI_nes_256x240", "mode": "color", "step": 6, "pixel": 4,
          "kbps": 5, "snap_seconds": 6}
     ],
-    "menu": {"name": "MENU", "frames": "resouce/PuniNeko_nes_240h", "fps": 60, "x": 96, "mode": "mono", "kbps": 6}
+    "menu": {"name": "MENU", "frames": "resouce/PuniNeko_nes_240h", "fps": 60, "x": 96, "mode": "mono", "kbps": 6, "audio_rate": 14}
 }

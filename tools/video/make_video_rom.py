@@ -72,7 +72,9 @@ SEG_BYTES = 497             # 1 セグメント = DMC の長さ 16*31+1 バイ�
 AUDIO_SLOT = 512            # 1 セグメントの置き場（64 の倍数）
 CHUNKS_PER_SEG = 8          # 途中から鳴らすときは 64 バイト単位
 FRAME2 = 59561              # 1 フレーム = 29780.5 CPU サイクル（の 2 倍）
-AUDIO_SWING = 56            # 音の振れ幅（64 ± 56）
+#   音の振れ幅（64 ± audio_swing、既定 56）と 1 bit 列の決め方（audio_enc）は titles.json で選ぶ。
+#   audio_enc: "greedy" = 目標より低ければ上げる（既定）/ "viterbi" = 差の 2 乗和が最小（dpcm_viterbi）。
+#   viterbi・振れ幅 28 は数字上の誤差は減るが、小さい音のときの「ピー」というキャリアの音が目立った（段階6）
 AUDIO_TOL_FRAMES = 6        # バンクに入れる音声の時間の余裕
 
 
@@ -713,7 +715,20 @@ def encode(fr, tol, snap_every, kbps=None, log_every=2000):
 
 # ---------------------------------------------------------------- 音声（DPCM）
 
-def encode_audio(path, n_packets, rate):
+def dpcm_greedy(t):
+    """1 bit ずつ: 目標より低ければ +2、高ければ -2（DMC と同じく 0〜127 の外には出ない）。長さ len(t)+1、先頭は 64"""
+    lv, ll = 64, [64]
+    for v in t.tolist():
+        if v > lv:
+            if lv <= 125:
+                lv += 2
+        elif lv >= 2:
+            lv -= 2
+        ll.append(lv)
+    return np.array(ll, dtype=np.int16)
+
+
+def encode_audio(path, n_packets, rate, enc="greedy", swing=56):
     """動画ファイルの音声 → DPCM のセグメント（1 個 AUDIO_SLOT バイト）のリスト
 
     セグメント = 1 bit の増減 497 バイト（DMC の長さ 16*31+1）+ 64 バイトごとの開始レベル 8 バイト + 余り
@@ -724,12 +739,12 @@ def encode_audio(path, n_packets, rate):
     seg2 = SEG_BYTES * 8 * period * 2
     hz = CPU_HZ / period
     cmd = ["ffmpeg", "-v", "error", "-i", path, "-vn", "-ac", "1", "-ar", str(int(round(hz))),
-           "-af", f"highpass=f=60,lowpass=f={int(min(7000, hz * 0.42))}", "-f", "f32le", "-"]
+           "-af", f"highpass=f=60,lowpass=f={int(min(10000, hz * 0.42))}", "-f", "f32le", "-"]   # 11.2kHz なら 4.7kHz
     raw = subprocess.run(cmd, stdout=subprocess.PIPE, check=True).stdout
     x = np.frombuffer(raw, dtype=np.float32).astype(np.float64)
     peak = np.percentile(np.abs(x), 99.9) if len(x) else 1.0
     x = np.clip(x / max(peak, 1e-6), -1, 1)
-    target = 64 + x * AUDIO_SWING
+    target = 64 + x * swing
     bits_per_seg = SEG_BYTES * 8
     need_t2 = n_packets * FRAME2 + 2 * FRAME2 * 60
     nseg = int(need_t2 // seg2) + 2
@@ -737,25 +752,9 @@ def encode_audio(path, n_packets, rate):
     t = np.full(nbits, 64.0)
     n = min(nbits, len(target))
     t[:n] = target[:n]
-    # 1 bit ずつ: 目標より低ければ +2、高ければ -2（DMC と同じく 0〜127 の外には出ない）
-    bits = np.zeros(nbits, dtype=np.uint8)
-    levels = np.zeros(nbits + 1, dtype=np.int16)
-    lv = 64
-    levels[0] = lv
-    tl = t.tolist()
-    bl = [0] * nbits
-    ll = [0] * (nbits + 1)
-    ll[0] = lv
-    for i in range(nbits):
-        if tl[i] > lv:
-            bl[i] = 1
-            if lv <= 125:
-                lv += 2
-        elif lv >= 2:
-            lv -= 2
-        ll[i + 1] = lv
-    bits[:] = bl
-    levels[:] = ll
+    levels = dpcm_viterbi(t) if enc == "viterbi" else dpcm_greedy(t)
+    nxt, prv = levels[1:], levels[:-1]
+    bits = ((nxt > prv) | ((nxt == prv) & (prv >= 126))).astype(np.uint8)   # 上がる / 126 に張り付き = 1
     segs = []
     for j in range(nseg):
         b = bits[j * bits_per_seg:(j + 1) * bits_per_seg]
@@ -764,6 +763,51 @@ def encode_audio(path, n_packets, rate):
         seg = data + starts
         segs.append(seg + b"\x00" * (AUDIO_SLOT - len(seg)))
     return segs
+
+
+def dpcm_viterbi(t, chunk=4096, group=256):
+    """目標の波形 t（0〜127）→ DMC のレベル列（長さ len(t)+1、先頭は 64）
+
+    1 bit ずつ ±2 しか動けない DMC で、「目標との差の 2 乗和」が最小になる道をビタビ法で探す。
+    （目標より低ければ上げる、という 1 つずつの決め方より、急な変化の前から準備できるぶん誤差が減る）
+    レベル 0,2,…,126 の 64 状態。chunk サンプルごとに区切り、区切りのレベルは目標に近い 4 の倍数に固定する。
+    こうすると区切りどうしが独立になるので、numpy でまとめて（group 区切りずつ）解ける。
+    """
+    n = len(t)
+    nch = -(-n // chunk)
+    tt = np.full(nch * chunk, 64.0)
+    tt[:n] = t
+    tt = tt.reshape(nch, chunk)
+    # 区切りの状態（状態番号 = レベル/2。偶数にそろえ、chunk も偶数なので必ず届く）
+    bnd = (np.clip(np.round(tt[:, 0] / 4), 0, 31) * 2).astype(np.int64)
+    bnd[0] = 32
+    ends = np.r_[bnd[1:], 32]
+    S = np.arange(64) * 2.0
+    pa = np.r_[0, np.arange(63)]            # bit 1 で来る元（s=0 は 0 で bit 0 の張り付きだが、元は同じ 0）
+    pb = np.r_[np.arange(1, 64), 63]        # bit 0 で来る元（s=63 は 63 で bit 1 の張り付き）
+    out = np.empty((nch, chunk), np.int16)
+    for g0 in range(0, nch, group):
+        g1 = min(nch, g0 + group)
+        k = g1 - g0
+        cost = np.full((k, 64), 1e18)
+        cost[np.arange(k), bnd[g0:g1]] = 0.0
+        back = np.empty((chunk, k, 64), np.uint8)
+        seg = tt[g0:g1]
+        for i in range(chunk):
+            ca, cb = cost[:, pa], cost[:, pb]
+            ta = ca <= cb
+            back[i] = np.where(ta, pa, pb)
+            cost = np.where(ta, ca, cb) + (S[None, :] - seg[:, i:i + 1]) ** 2
+        # 終わりは次の区切りの状態に固定して、後ろからたどる
+        s = ends[g0:g1].copy()
+        rows = np.arange(k)
+        for i in range(chunk - 1, -1, -1):
+            out[g0:g1, i] = s * 2
+            s = back[i, rows, s]
+    lv = np.empty(n + 1, np.int16)
+    lv[0] = 64
+    lv[1:] = out.reshape(-1)[:n]
+    return lv
 
 
 def dmc_levels(segs):
@@ -838,7 +882,8 @@ def choose_slots(enc, rate):
     if not enc.get("segs"):
         return AudioCfg(rate, 1)
     best = None
-    for ns in range(6, 41):
+    max_ns = (DATA_SIZE - 0x4000) // AUDIO_SLOT      # DMC が読めるのは $C000 から（$C000〜音声の置き場の終わり）
+    for ns in range(6, min(40, max_ns) + 1):
         acfg = AudioCfg(rate, ns)
         nb = len(pack_stream(enc["packets"], enc["segs"], acfg)[0])
         if best is None or nb < best[0]:
@@ -871,6 +916,10 @@ def build_rom(streams, code):
         start = len(banks)
         sbanks, pos = pack_stream(enc["packets"], segs, acfg)
         banks += sbanks
+        print(f"  [{sid}] {len(sbanks)} バンク（ここまで {len(banks)}）")
+        if len(banks) > 256:
+            sys.exit(f"ROM に入りません（{len(banks)} バンク以上。上限 256）。"
+                     "titles.json の kbps（映像の量）や audio_rate を下げてください")
         if len(enc["snaps"]) > 255:
             sys.exit("スナップショットが多すぎます（255 まで）。snap_seconds を大きくしてください")
         table = 0x8000 + len(cat.video)
@@ -1206,7 +1255,7 @@ local script = coroutine.create(function()
   check("REPEAT: Opening をもう一度最初から", rd(A.state) == 1 and rd(A.stream) == 0 and rd16(A.frames) < 60)
 
   -- グレーとカラー: PPU の中身をパケットごとにエンコーダの計算と比べる
-  for _, t in ipairs({{2, S2, "グレー（2 TK REMIX）"}, {3, S3, "カラー（3 2026AI）"}}) do
+  for _, t in ipairs({{2, S2, "2 TK REMIX"}, {3, S3, "カラー（3 2026AI）"}}) do
     press("start"); wait(5)
     while rd(A.sel) ~= t[1] do press("down") end
     press("a")
@@ -1307,7 +1356,7 @@ def encode_title(t, defaults, cache_dir, seconds=None):
     return enc
 
 
-def encode_title_audio(t, enc, cache_dir, rate):
+def encode_title_audio(t, enc, cache_dir, rate, amode=("greedy", 56)):
     """titles.json の "audio"（省略時は 連番フォルダ名.mp4）→ DPCM のセグメント。"audio": false なら無音"""
     src = t.get("audio", os.path.normpath(t["frames"]) + ".mp4")
     if src is False:
@@ -1318,13 +1367,13 @@ def encode_title_audio(t, enc, cache_dir, rate):
         return None
     st = os.stat(path)
     key = json.dumps([ENCODER_VERSION, src, st.st_size, int(st.st_mtime), len(enc["packets"]), rate,
-                      SEG_BYTES, AUDIO_SWING])
+                      SEG_BYTES, amode[1]] + ([] if amode[0] == "greedy" else [amode[0]]))
     cfile = os.path.join(cache_dir, "dmc_" + hashlib.sha1(key.encode()).hexdigest()[:16] + ".pkl")
     if os.path.exists(cfile):
         with open(cfile, "rb") as fp:
             return pickle.load(fp)
     print(f"  {t['name']}: 音声を DPCM（{CPU_HZ / DMC_PERIODS[rate] / 1000:.1f}kHz）に変換します（{src}）")
-    segs = encode_audio(path, len(enc["packets"]), rate)
+    segs = encode_audio(path, len(enc["packets"]), rate, *amode)
     with open(cfile, "wb") as fp:
         pickle.dump(segs, fp)
     return segs
@@ -1356,7 +1405,9 @@ def main():
             continue
         enc = dict(encode_title(t, cfg, cache_dir, a.seconds))
         rate = int(t.get("audio_rate", cfg.get("audio_rate", 9)))
-        enc["segs"] = encode_title_audio(t, enc, cache_dir, rate)
+        amode = (t.get("audio_enc", cfg.get("audio_enc", "greedy")),
+                 int(t.get("audio_swing", cfg.get("audio_swing", 56))))
+        enc["segs"] = encode_title_audio(t, enc, cache_dir, rate, amode)
         enc["acfg"] = choose_slots(enc, rate)
         streams[sid] = enc
 
