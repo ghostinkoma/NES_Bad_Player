@@ -1,0 +1,27 @@
+{
+    "threshold": 128,
+    "tol": 0,
+    "snap_seconds": 3,
+    "audio_rate": 9,
+    "titles": [
+        {"name": "OPENING",  "frames": "resouce/openig/bmp", "fps": 30, "mode": "pal4",
+         "colors": ["0F", "30", "16", "1A"], "fill_gaps": true, "audio": false,
+         "append": [
+            {"nes_frames": 20, "base": "last"},
+            {"nes_frames": 80, "base": "prev",
+             "texts": [{"text": "(C) Ghostinkoma", "y": 202, "size": 12}]},
+            {"nes_frames": 12, "base": "black",
+             "texts": [{"text": "DISCLAIMER", "y": 72, "size": 13, "font": "tahomabd.ttf"}]},
+            {"nes_frames": 12, "texts": [{"text": "This software is provided \"AS IS\", without", "y": 98, "align": "left", "x": 19, "width": 999}]},
+            {"nes_frames": 12, "texts": [{"text": "warranty of any kind, express or implied. In", "y": 113, "align": "left", "x": 19, "width": 999}]},
+            {"nes_frames": 12, "texts": [{"text": "no event shall the author be liable for any", "y": 128, "align": "left", "x": 19, "width": 999}]},
+            {"nes_frames": 12, "texts": [{"text": "damages arising from the use of this", "y": 143, "align": "left", "x": 19, "width": 999}]},
+            {"nes_frames": 12, "texts": [{"text": "software. Use at your own risk.", "y": 158, "align": "left", "x": 19, "width": 999}]},
+            {"seconds": 2}
+         ]},
+        {"name": "PUNINEKO", "same_as": "menu"},
+        {"name": "ORIGEN",   "frames": "resouce/origen_nes_256x240", "mode": "mono", "snap_seconds": 4, "audio_rate": 15, "pcm_kbps": 11.0},
+        {"name": "TK REMIX", "enabled": false, "frames": "resouce/Tetsuy_Komuro_Remix.webm_nes_256x240", "mode": "gray", "step": 2,
+         "kbps": 4.5, "snap_seconds": 6}],
+    "menu": {"name": "MENU", "frames": "resouce/PuniNeko_nes_240h", "fps": 60, "x": 96, "mode": "mono", "audio_rate": 15, "pcm_kbps": 6.0, "loop": true}
+}

@@ -10,6 +10,8 @@
 - 音は puNES で聞くのがおすすめです（Mesen では音にジッタが混じります。下の「音をきれいに聞くには」を参照）。
 - 一時停止、コマ送り、コマ戻し、FPS 表示ができます。再生モードは REPEAT / STOP / SEQ の3つです。
 - マッパーは BNROM（mapper 34）で、ROM は最大 8MB です。
+- **配布用サンプル（PCM 版）**：オープニング、メニューの背景の動画（PUNINEKO）、Bad Apple!! の原曲だけを入れ、
+  音を $4011 の 7bit PCM（18.6kHz）で鳴らす版です。DPCM 版より音がきれいで、puNES でも Mesen でもきれいに鳴ります。
 
 ## 必要なもの
 - [cc65](https://cc65.github.io/)：`ca65.exe` と `ld65.exe` をこのフォルダの1つ上の `bin\` に置きます。
@@ -34,7 +36,9 @@ PowerShell でこのフォルダに移動してから実行します。
   素材は各自で用意して `resouce\` に置き、`titles.json` のパスを合わせてください。
   素材の形式（連番 BMP と同じ名前の .mp4）は [docs/PHASE2X.md](docs/PHASE2X.md) を見てください。
 - `.\build_video.ps1 -Test` を実行すると、Mesen を画面なしで動かして、動作を自動で確認します。
-- `.\build_video.ps1 -Sample` を実行すると、配布用のサンプル ROM（オープニング、メニュー、ORIGEN だけ）を
+- `.\build_pcm_video.ps1` を実行すると、音を $4011 の 7bit PCM（18.6kHz）で鳴らす配布用サンプル ROM を
+  `build\pcmv\pcm_video.nes` に作ります（オープニング、メニューの背景の動画、Bad Apple!! の原曲だけ。CPU が 96 サイクルごとに音を書くプレイヤー）。設定は `tools\video\titles_pcm.json` です。
+- `.\build_video.ps1 -Sample` を実行すると、DPCM 版の配布用のサンプル ROM（オープニング、メニュー、ORIGEN だけ）を
   `build\sample\NES_BadPlayer_sample.nes` に作ります。設定は `tools\video\titles_sample.json` です。
   `titles.json` で `"enabled": false` にした動画は ROM に入らず、メニューにも出ません。
 
@@ -58,6 +62,7 @@ PowerShell でこのフォルダに移動してから実行します。
 ## ドキュメント
 - [docs/PHASE2X.md](docs/PHASE2X.md)：使い方、仕組み、ROM の構成、パケットの形式、テスト
 - [docs/HISTORY.md](docs/HISTORY.md)：開発の記録
+- [docs/BUGFIX.md](docs/BUGFIX.md)：指摘を受けて直した不具合の一覧（配布用サンプル・PCM 版）
 - [PLAN.md](PLAN.md)：プロジェクト全体の計画
 
 ## ライセンス
