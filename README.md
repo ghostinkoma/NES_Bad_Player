@@ -1,5 +1,7 @@
 # NES_BadPlayer
 
+[English README](README_EN.md)
+
 ファミコン（NES）の画面いっぱい（256×240）で、ROM に入れた動画を音声つきで再生するプレイヤーです。
 エミュレータ Mesen で動かします。
 
