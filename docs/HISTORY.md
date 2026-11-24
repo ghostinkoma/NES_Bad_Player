@@ -130,7 +130,7 @@ LuaNES のキー（W/A/S/D=十字、O=A、P=B、I=SELECT、Enter=START）を押�
 
 ---
 
-## フェーズ2.x: ROM に入れた動画のフルサイズ再生（Mesen 用）— ✅ 段階6（音質の改善。ORIGEN だけ 24.9kHz）確定（2026-11-23）
+## フェーズ2.x: ROM に入れた動画のフルサイズ再生（Mesen 用）— ✅ 段階7（配布用サンプル ROM）完了（2026-11-24）
 
 第3フェーズの途中で追加したフェーズ。ROM に入れた動画を 256×240 で再生する。エミュレータは Mesen（`D:\hobby\nes\Mesen.exe`、2.2.1）。
 最終的な目標: メニュー（PuniNeko のループ + スプライトで選択）、4 本の動画（Opening / Origen = 2値、
@@ -321,3 +321,28 @@ Mesen で画面を書き出して確認。
   `.\build_video.ps1 -Test` で 29 項目 + 音声（6,768 フレーム全部正しい、ずれ −34〜+83ms、音飛び 0）OK
 - 開発側: `.\build_video.ps1 -Test` で 29 項目 + 音声（6,768 フレーム、DMC が読むデータ全部正しい、ずれ −34〜+83ms、音飛び 0）OK
 - ユーザー環境（Mesen で聞く）: 未確認
+
+### 段階7: 配布用サンプル ROM（2026-11-24）
+権利の確認が取れた素材（オープニング、メニュー画面と BGM、ORIGEN）だけを入れた、配布用の ROM を作れるようにした。
+
+| ファイル | 内容 |
+|---|---|
+| `tools/video/titles_sample.json` | 配布用の設定。titles.json と同じで、TK REMIX と 2026AI を `"enabled": false` にしたもの |
+| `build_video.ps1` | `-Sample`（配布用をビルド）、`-Config`・`-Out`（設定と出力先を指定）を追加。変換結果は `build\video\cache` を共用 |
+| `nes/src/video.s` | メニューで、入っていない動画の名前を出さない（今までは灰色で出していた）。カーソルも入っていない動画を飛ばす |
+| `tools/video/make_video_rom.py` | `--cache-dir` を追加。`--mesen-test` は OPENING と ORIGEN があれば動き、グレー・カラーの確認は入っている動画だけ |
+| `tools/video/check_audio.py` | 音声の確認も、入っている動画だけを再生する |
+
+#### 起動方法
+```powershell
+.\build_video.ps1 -Sample -Test
+.\run_mesen.ps1 -Rom build\sample\NES_BadPlayer_sample.nes
+```
+
+#### 確認結果
+- `build\sample\NES_BadPlayer_sample.nes`: 3,080,208 バイト（94 バンク）。OPENING 2 + ORIGEN 77 + メニュー 7 バンク
+- 開発側: 25 項目 + 音声（4,229 フレーム、DMC が読むデータ全部正しい、ずれ −23〜+25ms、音飛び 0）OK
+- 気づいたこと: メニューでカーソルを動かすたびに背景が 1/60 秒止まり、BGM が映像より約 17ms 先に進む（前からの動き）。
+  最初のテストでは、入っていない動画を探して ↓ を 8 回押したため +124ms までずれて NG になった。テストを直して解決。
+  背景が最後まで行って最初に戻ると、ずれはなくなる
+- ユーザー環境: 未確認

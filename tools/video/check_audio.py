@@ -43,7 +43,7 @@ local script = coroutine.create(function()
   for i = 1, 8 do press("left"); wait(1); while rd(A.ppu_busy) ~= 0 do wait(1) end; wait(2) end
   press("b"); wait(600)        -- コマ戻しの後に再開
   press("start"); wait(300)    -- メニューへ
-  for _, n in ipairs({3, 2}) do  -- カラー・グレーも 20 秒ずつ（途中で一時停止・再開）
+  for _, n in ipairs({%(extra)s}) do  -- カラー・グレーも 20 秒ずつ（途中で一時停止・再開）。入っている動画だけ
     while rd(A.sel) ~= n do press("down") end
     press("a"); wait(900)
     press("b"); wait(30)
@@ -69,14 +69,22 @@ end, emu.eventType.endFrame)
 
 
 
-def make_lua(labels, out):
+def load_info(audio_dir):
+    import json
+    with open(os.path.join(audio_dir, "movies_info.json"), encoding="utf-8") as fp:
+        return {int(k): v for k, v in json.load(fp).items()}
+
+
+def make_lua(labels, out, audio_dir):
+    info = load_info(audio_dir)
+    extra = ", ".join(str(n) for n in (3, 2) if n in info)   # ROM に入っているグレー・カラーだけ
     with open(out, "w", encoding="utf-8", newline="\n") as fp:
-        fp.write(LUA % {k: labels[k] for k in ("frames", "stream", "bank", "paused", "audio_on", "ppu_busy", "sel")})
+        fp.write(LUA % dict(extra=extra, **{k: labels[k] for k in
+                                            ("frames", "stream", "bank", "paused", "audio_on", "ppu_busy", "sel")}))
 
 
 def check(log, audio_dir):
-    import json
-    info = {int(k): v for k, v in json.load(open(os.path.join(audio_dir, "movies_info.json"), encoding="utf-8")).items()}
+    info = load_info(audio_dir)
     audio = {}
     for sid in info:
         p = os.path.join(audio_dir, f"audio_{sid}.bin")
@@ -132,14 +140,15 @@ def check(log, audio_dir):
     print(f"  再生中の音飛び: {jumps} 回")
     if first_bad:
         print(f"  最初の問題: フレーム {first_bad[0]}: {first_bad[1]} {first_bad[2]}")
-    ok = checked > 2000 and bad_byte == 0 and bad_sync == 0 and jumps == 0 and len(per_stream) >= 4
+    ok = checked > 2000 and bad_byte == 0 and bad_sync == 0 and jumps == 0 and set(per_stream) == set(audio)
     print("音声の確認: " + ("OK" if ok else "NG"))
     return ok
 
 
 if __name__ == "__main__":
+    default_dir = os.path.join(m.ROOT, "build", "video")
     if sys.argv[1] == "lua":
-        make_lua(m.read_labels(sys.argv[2]), sys.argv[3])
+        make_lua(m.read_labels(sys.argv[2]), sys.argv[3], sys.argv[4] if len(sys.argv) > 4 else default_dir)
     else:
-        ok = check(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else os.path.join(m.ROOT, "build", "video"))
+        ok = check(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else default_dir)
         sys.exit(0 if ok else 1)

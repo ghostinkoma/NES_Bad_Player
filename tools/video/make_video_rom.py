@@ -1255,7 +1255,7 @@ local script = coroutine.create(function()
   check("REPEAT: Opening をもう一度最初から", rd(A.state) == 1 and rd(A.stream) == 0 and rd16(A.frames) < 60)
 
   -- グレーとカラー: PPU の中身をパケットごとにエンコーダの計算と比べる
-  for _, t in ipairs({{2, S2, "2 TK REMIX"}, {3, S3, "カラー（3 2026AI）"}}) do
+  for _, t in ipairs({%(extra)s}) do
     press("start"); wait(5)
     while rd(A.sel) ~= t[1] do press("down") end
     press("a")
@@ -1302,8 +1302,12 @@ def write_mesen_test(path, labels, dec, opening_packets, nback):
 
     def states(d):
         return [state_hash(state_bytes(d.nt[k], d.p0[k], d.p1[k], d.pal[k])) for k in range(min(500, len(d.nt)))]
+    # グレー・カラーの確認は、入っている動画だけ
+    extra = ", ".join(f'{{{sid}, S{sid}, "{label}"}}' for sid, label in ((2, "2 TK REMIX"), (3, "カラー（3 2026AI）"))
+                      if sid in dec)
     lua = LUA_TEST % dict(h1=",".join(map(str, h1)), f1=",".join(map(str, f1)), n0=opening_packets, nback=nback,
-                          s2=",".join(map(str, states(dec[2]))), s3=",".join(map(str, states(dec[3]))),
+                          s2=",".join(map(str, states(dec[2]))) if 2 in dec else "",
+                          s3=",".join(map(str, states(dec[3]))) if 3 in dec else "", extra=extra,
                           **{k: labels[k] for k in ("frames", "state", "stream", "paused", "at_end",
                                                     "mode", "ppu_busy", "sel")})
     with open(path, "w", encoding="utf-8", newline="\n") as fp:
@@ -1388,12 +1392,13 @@ def main():
     ap.add_argument("--seconds", type=float, help="各動画の先頭から何秒だけ使うか（試し用）")
     ap.add_argument("--mesen-test", action="store_true", help="Mesen で動かす確認用 Lua を書き出す")
     ap.add_argument("--preview", action="store_true", help="ROM の中身から再現した動画を mp4 で書き出す（ffmpeg）")
+    ap.add_argument("--cache-dir", help="変換結果の置き場所（省略時は ROM と同じフォルダの cache）")
     a = ap.parse_args()
 
     with open(a.config, encoding="utf-8-sig") as fp:
         cfg = json.load(fp)
     out_dir = os.path.dirname(os.path.abspath(a.out))
-    cache_dir = os.path.join(out_dir, "cache")
+    cache_dir = a.cache_dir or os.path.join(out_dir, "cache")
     os.makedirs(cache_dir, exist_ok=True)
 
     entries = [(i, t) for i, t in enumerate(cfg["titles"])] + [(MENU_ID, cfg["menu"])]
@@ -1483,8 +1488,8 @@ def main():
     print(f"レポート: {rep_path}")
 
     if a.mesen_test:
-        if not all(k in decoded for k in (0, 1, 2, 3)):
-            sys.exit("--mesen-test には 4 本すべてが必要です")
+        if not all(k in decoded for k in (0, 1)):
+            sys.exit("--mesen-test には OPENING と ORIGEN（0 番と 1 番）が必要です")
         labels = read_labels(a.labels)
         lua = os.path.splitext(a.out)[0] + "_mesen_test.lua"
         nback = 40 if a.seconds else 70

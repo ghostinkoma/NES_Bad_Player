@@ -34,6 +34,9 @@ PowerShell でこのフォルダに移動してから実行します。
   素材は各自で用意して `resouce\` に置き、`titles.json` のパスを合わせてください。
   素材の形式（連番 BMP と同じ名前の .mp4）は [docs/PHASE2X.md](docs/PHASE2X.md) を見てください。
 - `.\build_video.ps1 -Test` を実行すると、Mesen を画面なしで動かして、動作を自動で確認します。
+- `.\build_video.ps1 -Sample` を実行すると、配布用のサンプル ROM（オープニング、メニュー、ORIGEN だけ）を
+  `build\sample\NES_BadPlayer_sample.nes` に作ります。設定は `tools\video\titles_sample.json` です。
+  `titles.json` で `"enabled": false` にした動画は ROM に入らず、メニューにも出ません。
 
 ### 音をきれいに聞くには（puNES がおすすめ）
 - Mesen では、音にジッタ（細かいブツブツ・揺れ）が混じります。これはエミュレータの音声出力の特性です。

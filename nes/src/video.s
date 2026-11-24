@@ -278,21 +278,27 @@ menu_frame:
     lda pad_new
     and #PAD_UP
     beq @no_up
-    lda sel
-    sec
-    sbc #1
+    ldx sel
+:   dex                     ; 入っていない動画は飛ばす
+    txa
     and #3
-    sta sel
+    tax
+    lda enabled,x
+    beq :-
+    stx sel
     jsr menu_changed
 @no_up:
     lda pad_new
     and #PAD_DOWN
     beq @no_down
-    lda sel
-    clc
-    adc #1
+    ldx sel
+:   inx
+    txa
     and #3
-    sta sel
+    tax
+    lda enabled,x
+    beq :-
+    stx sel
     jsr menu_changed
 @no_down:
     lda pad_new
@@ -1015,13 +1021,12 @@ build_oam:
     sta tmp2                ; タイトル番号
 @title:
     ldx tmp2
-    lda #0                  ; 色: 0=白 / 1=黄（選択中）/ 2=灰（入っていない）
+    lda enabled,x           ; 入っていない動画は名前を出さない
+    beq @next_t
+    lda #0                  ; 色: 0=白 / 1=黄（選択中）
     cpx sel
     bne :+
     lda #1
-:   ldy enabled,x
-    bne :+
-    lda #2
 :   sta tattr
     lda #16
     sta tx
@@ -1037,6 +1042,7 @@ build_oam:
     lda title_hi,x
     sta ptr+1
     jsr put_str
+@next_t:
     inc tmp2
     lda tmp2
     cmp #NTITLES
